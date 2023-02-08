@@ -7,30 +7,29 @@ use tokio::fs;
 use tokio::io;
 use crate::implementations::ifc::Database;
 
-pub struct Basic<'a> {
-    folder_path: &'a Path,
+pub struct Basic {
     file: Option<fs::File>,
 }
 
-impl<'a> Basic<'a> {
-    pub fn new() -> Basic<'a> {
+impl Basic {
+    pub fn new() -> Basic {
         Basic {
-            folder_path: Path::new("./.basic"),
             file: None,
         }
     }
 }
 
 #[async_trait]
-impl Database for Basic<'_> {
-    async fn init<'a>(&'a mut self) -> io::Result<()> {
-        fs::create_dir_all(&self.folder_path).await?;
+impl Database for Basic {
+    async fn init(&mut self) -> io::Result<()> {
+        let path = Path::new("./.basic");
+        fs::create_dir_all(path).await?;
 
         let file = fs::OpenOptions::new()
             .read(true)
             .append(true)
             .create(true)
-            .open(self.folder_path.join("data"))
+            .open(path.join("data"))
             .await?;
 
         self.file = Some(file);
