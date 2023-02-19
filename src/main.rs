@@ -2,9 +2,9 @@ mod implementations;
 
 use std::path::PathBuf;
 use tokio::io;
-use implementations::basic::Basic;
+use implementations::Basic;
 use implementations::ifc::Database;
-use implementations::hash::Hash;
+use implementations::Hash;
 use std::str;
 
 #[tokio::main]

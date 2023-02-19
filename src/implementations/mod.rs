@@ -1,3 +1,7 @@
 pub mod ifc;
-pub mod basic;
-pub mod hash;
+
+mod basic;
+pub use self::basic::Basic;
+
+mod hash;
+pub use self::hash::hash::Hash;

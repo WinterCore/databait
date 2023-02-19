@@ -6,39 +6,26 @@ use tokio::{fs, io};
 use tokio::io::{AsyncBufReadExt, AsyncSeekExt, AsyncWriteExt, AsyncReadExt};
 
 use crate::implementations::ifc::Database;
-
-#[derive(Debug)]
-struct FileSegment {
-    fd: fs::File,
-    num: u32,
-}
-
-#[derive(Debug)]
-struct HashMemEntry {
-    segment_num: u32,
-    pos: u64,
-}
+use super::segment::FileSegment;
 
 #[derive(Debug)]
 pub struct Hash {
     segments: VecDeque<FileSegment>,
-    hash: HashMap<String, HashMemEntry>,
     page_size: u64,
     path: PathBuf,
 }
 
 impl Hash {
-    const KEY_MAX_LEN: usize = 128;
-
     pub fn new(path: PathBuf, page_size: u64) -> Hash {
         Hash {
             segments: VecDeque::new(),
-            hash: HashMap::new(),
             page_size,
             path,
         }
+
     }
 
+    /*
     fn get_segment_name(num: u32) -> String {
         format!("segment-{:0>6}", num)
     }
@@ -137,8 +124,41 @@ impl Hash {
 
     async fn merge(&mut self) -> io::Result<()> {
     }
+    */
 }
 
+#[async_trait]
+impl Database for Hash {
+    async fn reset(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+
+    async fn init(&mut self) -> io::Result<()> {
+        self.segments = FileSegment::from_dir(&self.path).await?;
+        
+        if self.segments.len() == 0 {
+            let initial_segment = FileSegment::create(&self.path).await?;
+            self.segments.push_front(initial_segment);
+        }
+
+        Ok(())
+    }
+
+    async fn write(&mut self, key: &str, value: &str) -> io::Result<()> {
+
+        Ok(())
+    }
+
+    async fn read(&mut self, key: &str) -> io::Result<Option<String>> {
+        Ok(None)
+    }
+
+    async fn delete(&mut self, key: &str) -> io::Result<bool> {
+        Ok(true)
+    }
+}
+
+/*
 #[async_trait]
 impl Database for Hash {
     async fn init(&mut self) -> io::Result<()> {
@@ -295,6 +315,7 @@ impl Database for Hash {
         Ok(true)
     }
 }
+*/
 
 
 
