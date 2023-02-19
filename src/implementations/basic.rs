@@ -1,20 +1,19 @@
 use async_trait::async_trait;
-use tokio::io::AsyncBufReadExt;
-use tokio::io::AsyncSeekExt;
-use tokio::io::AsyncWriteExt;
-use std::path::Path;
-use tokio::fs;
-use tokio::io;
+use tokio::io::{AsyncBufReadExt, AsyncSeekExt, AsyncWriteExt};
+use std::path::PathBuf;
+use tokio::{fs, io};
 use crate::implementations::ifc::Database;
 
 pub struct Basic {
     file: Option<fs::File>,
+    path: PathBuf,
 }
 
 impl Basic {
-    pub fn new() -> Basic {
+    pub fn new(path: PathBuf) -> Basic {
         Basic {
             file: None,
+            path,
         }
     }
 }
@@ -22,14 +21,13 @@ impl Basic {
 #[async_trait]
 impl Database for Basic {
     async fn init(&mut self) -> io::Result<()> {
-        let path = Path::new("./.basic");
-        fs::create_dir_all(path).await?;
+        fs::create_dir_all(&self.path).await?;
 
         let file = fs::OpenOptions::new()
             .read(true)
             .append(true)
             .create(true)
-            .open(path.join("data"))
+            .open(self.path.join("data"))
             .await?;
 
         self.file = Some(file);
@@ -78,5 +76,9 @@ impl Database for Basic {
         }
 
         Ok(found)
+    }
+
+    async fn delete(&mut self, key: &str) -> io::Result<bool> {
+        Ok(true)
     }
 }

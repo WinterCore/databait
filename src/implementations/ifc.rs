@@ -7,4 +7,5 @@ pub trait Database {
     async fn init(&mut self) -> io::Result<()>;
     async fn write(&mut self, key: &str, value: &str) -> io::Result<()>;
     async fn read(&mut self, key: &str) -> io::Result<Option<String>>;
+    async fn delete(&mut self, key: &str) -> io::Result<bool>;
 }
