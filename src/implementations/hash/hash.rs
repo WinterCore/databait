@@ -134,6 +134,7 @@ impl Database for Hash {
     }
 
     async fn init(&mut self) -> io::Result<()> {
+        fs::create_dir_all(&self.path).await?;
         self.segments = FileSegment::from_dir(&self.path).await?;
         
         if self.segments.len() == 0 {
@@ -145,16 +146,41 @@ impl Database for Hash {
     }
 
     async fn write(&mut self, key: &str, value: &str) -> io::Result<()> {
+        let most_recent_segment = self
+            .segments
+            .front_mut()
+            .expect("write: Uninitialized database");
+
+        most_recent_segment.write(key, value).await?;
 
         Ok(())
     }
 
     async fn read(&mut self, key: &str) -> io::Result<Option<String>> {
+
+        for segment in self.segments.iter_mut() {
+            let data_maybe = match segment.read(key).await {
+                Ok(data_maybe) => data_maybe,
+                Err(_)         => return Ok(None),
+            };
+
+            if let Some(data) = data_maybe {
+                return Ok(Some(data));
+            }
+        }
+
         Ok(None)
     }
 
     async fn delete(&mut self, key: &str) -> io::Result<bool> {
-        Ok(true)
+
+        for segment in self.segments.iter_mut() {
+            if segment.delete(key).await? {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 }
 

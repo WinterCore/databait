@@ -1,7 +1,7 @@
-use tokio::{fs, io::{self, AsyncSeekExt}};
+use tokio::{fs, io::{self, AsyncSeekExt, AsyncWriteExt}};
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
-use super::data::{read_entry, write_entry};
+use super::data::{read_entry, write_entry, delete_entry, ReadResult};
 
 #[derive(Debug)]
 pub struct FileSegment {
@@ -26,16 +26,26 @@ impl FileSegment {
 
     async fn generate_hash_for_file(fd: &mut fs::File) -> io::Result<HashMap<String, u64>> {
         fd.rewind().await?;
-        let mut hash: HashMap<String, u64> = HashMap::new();
 
+        let mut hash: HashMap<String, u64> = HashMap::new();
         let mut reader = io::BufReader::new(fd);
 
-        let mut pos = reader.stream_position().await?;
+        loop {
+            let pos = reader.stream_position().await?;
 
-        while let Some((key, _)) = read_entry(&mut reader).await? {
-            hash.insert(key, pos);
+            let entry = match read_entry(&mut reader).await {
+                Ok(entry) => entry,
+                Err(_) => break,
+            };
 
-            pos = reader.stream_position().await?;
+            match entry {
+                ReadResult::Success(key, _) => {
+                    hash.insert(key, pos);
+                },
+                ReadResult::Deleted(key) => {
+                    hash.remove(&key);
+                },
+            }
         }
 
         Ok(hash)
@@ -71,7 +81,7 @@ impl FileSegment {
 
         let fd = fs::OpenOptions::new()
             .read(true)
-            .append(true)
+            .write(true)
             .create(true)
             .open(path.join(Self::get_segment_name(num)))
             .await?;
@@ -91,7 +101,7 @@ impl FileSegment {
         for name in segment_files.into_iter() {
             let mut fd = fs::OpenOptions::new()
                 .read(true)
-                .append(true)
+                .write(true)
                 .create(true)
                 .open(path.join(&name))
                 .await?;
@@ -114,38 +124,53 @@ impl FileSegment {
     }
 
     pub async fn read(&mut self, key: &str) -> io::Result<Option<String>> {
-        
         let pos = *match self.hash.get(key) {
             Some(pos) => pos,
             None => return Ok(None),
         };
 
-
         let mut reader = io::BufReader::new(&mut self.fd);
         reader.seek(io::SeekFrom::Start(pos)).await?;
-        let maybe_data = read_entry(&mut reader).await?;
 
-        if let None = maybe_data {
-            return Ok(None);
-        }
-
-        let (found_key, value) = maybe_data.unwrap();
+        let (found_key, value) = match read_entry(&mut reader).await? {
+            ReadResult::Success(key, value) => (key, value),
+            ReadResult::Deleted(_) => return Err(io::Error::new(io::ErrorKind::Other, "Deleted")),
+        };
 
         if found_key != key {
-            println!("Key mismatch {} != {}", found_key, key);
-            return Ok(None);
+            return Err(io::Error::new(io::ErrorKind::Other, "Corrupted data"))
         }
 
         return Ok(Some(value));
     }
 
-    async fn write(&mut self, key: &str, value: &str) -> io::Result<()> {
+    pub async fn write(&mut self, key: &str, value: &str) -> io::Result<()> {
         let mut reader = io::BufReader::new(&mut self.fd);
         reader.seek(io::SeekFrom::End(0)).await?;
 
         let pos = write_entry(&mut reader, key, value).await?;
         self.hash.insert(key.to_owned(), pos);
 
+        reader.flush().await?;
+
         Ok(())
+    }
+
+    pub async fn delete(&mut self, key: &str) -> io::Result<bool> {
+        let exists = self.hash.contains_key(key);
+
+        if ! exists {
+            return Ok(false);
+        }
+
+        let mut reader = io::BufReader::new(&mut self.fd);
+        reader.seek(io::SeekFrom::End(0)).await?;
+
+        delete_entry(&mut reader, key).await?;
+        reader.flush().await?;
+
+        self.hash.remove(key);
+
+        Ok(true)
     }
 }
