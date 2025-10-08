@@ -10,12 +10,27 @@ use std::str;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    let path = PathBuf::from("./.hash");
+    let path = PathBuf::from("./.basic_db");
 
-    let mut db = Hash::new(path, 1024 * 1024);
+    let mut db = Basic::new(path);
 
     db.init().await?;
+    db.reset().await?;
     db.write("1", "erm").await?;
+    db.write("2", "erm").await?;
+    db.write("3", "two").await?;
+
+    let value = db.read(&"1").await?;
+
+    match value {
+        Some(v) => println!("Found {}", v),
+        None    => println!("Not found"),
+    }
+
+    // db.write("fu", "bar").await?;
+    // db.write("1", "two").await?;
+
+
     /*
 
     db.write("2", "ernj").await?;
@@ -32,14 +47,16 @@ async fn main() -> io::Result<()> {
         db.write(&"5", &format!("{}f value", i)).await?;
     }
     */
-    db.delete("1").await?;
+    // db.delete("1").await?;
 
+    /*
     let value = db.read(&"1").await?;
 
     match value {
         Some(v) => println!("Found {}", v),
         None    => println!("Not found"),
     }
+    */
 
     Ok(())
 }
